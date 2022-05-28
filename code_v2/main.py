@@ -62,7 +62,7 @@ def run_agents():
             if env.done():
                 break
         balances = env.get_balances()
-        print(balances)
+        # print(balances)
         if balances[0] == balances[1]:
             #print('draw')
             draws += 1
