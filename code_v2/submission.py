@@ -27,11 +27,13 @@ class AgentGreedyImproved(AgentGreedy):
         # #TODO: Add consideration to fuel.
         # return self.calculateProfit(env, taxi_id, 0) +  self.calculateProfit(env, taxi_id, 1) + taxi.cash
         if len(env.passengers) > 0:
-            has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
+             has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
+            #has_gas_to_0 = self.canReachToPassengerAndRefuel(env, taxi, 0)
         else:
             has_gas_to_0 = 0
         if len(env.passengers) > 1:
             has_gas_to_1 = self.hasGasToTarget(env, taxi_id, env.passengers[1].position)
+            #has_gas_to_1 = self.canReachToPassengerAndRefuel(env, taxi, 1)
         else:
             has_gas_to_1 = 0
         if taxi.passenger != None:
@@ -41,7 +43,7 @@ class AgentGreedyImproved(AgentGreedy):
             target_dest = taxi.position
             has_gas_to_2 = 0
         should_refuel = self.shouldRefuel(env, taxi_id, max(self.calculateProfit(env, taxi_id, 0), self.calculateProfit(env, taxi_id, 1), 0), has_gas_to_0, has_gas_to_1, has_gas_to_2)
-        return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 2 + (taxi.fuel -  manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
+        return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 1.5 + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
 
 
     def calculateProfit(self, env: TaxiEnv, taxi_id, passenger_id):
@@ -51,8 +53,9 @@ class AgentGreedyImproved(AgentGreedy):
         if len(env.passengers) > 0:
             s = env.passengers[passenger_id].position
             d = env.passengers[passenger_id].destination
+            distance_to_travel = manhattan_distance(s, d) + manhattan_distance(env.get_taxi(taxi_id).position, s)
             profit = manhattan_distance(s, d) - manhattan_distance(env.get_taxi(taxi_id).position, s)
-            return profit
+            return profit * (distance_to_travel + 2 <= env.num_steps / 2 + 1)
         return 0
 
     def hasGasToTarget(self, env, taxi_id, target):
@@ -84,8 +87,13 @@ class AgentGreedyImproved(AgentGreedy):
             return 0
         taxi = env.get_taxi(taxi_id)
         remaining_steps = env.num_steps
-        return min(remaining_steps, env.get_taxi(taxi_id).cash) >= max_profit and max_profit > 0
+        return min(remaining_steps / 2 + 1 - 2, env.get_taxi(taxi_id).cash) >= max_profit and max_profit > env.get_taxi((taxi_id + 1) % 2).cash
 
+
+    def canReachToPassengerAndRefuel(self, env: TaxiEnv, taxi, passenger_id):
+        distance_to_destination = manhattan_distance(taxi.position, env.passengers[passenger_id].position) + manhattan_distance(env.passengers[passenger_id].destination, env.passengers[passenger_id].position)
+        distance_to_gas_station = min(manhattan_distance(env.gas_stations[0].position, env.passengers[passenger_id].destination), manhattan_distance(env.gas_stations[1].position, env.passengers[passenger_id].destination))
+        return taxi.fuel >= distance_to_destination + distance_to_gas_station
 # Things to consider:
 # 2. PROFIT.
 # 4. Fuel remaining.
