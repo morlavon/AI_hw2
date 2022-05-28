@@ -33,7 +33,7 @@ class AgentGreedyImproved(AgentGreedy):
         if len(env.passengers) > 1:
             has_gas_to_1 = self.hasGasToTarget(env, taxi_id, env.passengers[1].position)
         else:
-            has_gas_to_1 = 1
+            has_gas_to_1 = 0
         if taxi.passenger != None:
             target_dest = taxi.passenger.destination
             has_gas_to_2 = self.hasGasToTarget(env, taxi_id, target_dest)
@@ -84,7 +84,7 @@ class AgentGreedyImproved(AgentGreedy):
             return 0
         taxi = env.get_taxi(taxi_id)
         remaining_steps = env.num_steps
-        return min(remaining_steps, env.get_taxi(taxi_id).cash) >= max_profit
+        return min(remaining_steps, env.get_taxi(taxi_id).cash) >= max_profit and max_profit > 0
 
 # Things to consider:
 # 2. PROFIT.
