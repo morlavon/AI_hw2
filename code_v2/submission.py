@@ -15,7 +15,12 @@ class AgentGreedyImproved(AgentGreedy):
 class AgentMinimax(Agent):
     # TODO: section b : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
-        raise NotImplementedError()
+        next_state, score = self.id_minimax(env, agent_id, time_limit)
+        return 
+
+    def id_minimax(self, env, agent_id, time_limit):
+        start_time = 
+        
 
 
 class AgentAlphaBeta(Agent):
