@@ -1,6 +1,9 @@
 from Agent import Agent, AgentGreedy
 from TaxiEnv import TaxiEnv, manhattan_distance
 import random
+import threading
+import time
+import ctypes
 
 
 class AgentGreedyImproved(AgentGreedy):
@@ -114,22 +117,166 @@ class AgentGreedyImproved(AgentGreedy):
 # F === Fuel remaining = current fuel - ((distance from passenger to dest) + (distance from taxi to passenger))
 
 
+global minimax_step
+minimax_step = ""
 
-class AgentMinimax(Agent):
+class AgentMinimax(AgentGreedyImproved):
     # TODO: section b : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
-        next_state, score = self.id_minimax(env, agent_id, time_limit)
-        return 
+        self.end_time = time.time() + 0.8*time_limit
+        step = self.id_minimax(env, agent_id, time_limit)
+        return step
 
-    def id_minimax(self, env, agent_id, time_limit):
-        start_time = 
-        
+    def id_minimax(self, env, agent_id):
+        depth = 1
+        while True:
+            last_chosen_step = self.minimax(env, agent_id, depth)
+            if time.time() > self.end_time:
+                print("max depth: ", depth)
+                break 
+            else:
+                step = last_chosen_step
+            depth += 1
+        return step
+
+    def minimax(self, env, agent_id, l):
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        children_results = [self.min(child, 1-agent_id, l-1) for child in children]
+        max_result = max(children_results)
+        index_selected = children_results.index(max_result)
+        return operators[index_selected]  
+    
+    def min(self, env, agent_id, l):
+        if time.time() > self.end_time:
+            return -1
+        if l == 0:
+            return self.heuristic(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        children_results = [self.max(child, 1-agent_id, l-1) for child in children]
+        min_result = min(children_results)
+        return min_result
+
+    def max(self, env, agent_id, l):
+        if time.time() > self.end_time:
+            return -1
+        if l == 0:
+            return self.heuristic(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        children_results = [self.min(child, 1-agent_id, l-1) for child in children]
+        max_result = max(children_results)
+        return max_result
+        # index_selected = children_results.index(max_result)
+        # return operators[index_selected]
+
+    def heuristic(self, env: TaxiEnv, taxi_id: int):
+        #Calculate PROFIT for each passenger.
+        taxi = env.get_taxi(taxi_id)
+        # if taxi.passenger != None:
+        #     return taxi.fuel - manhattan_distance(taxi.position, taxi.passenger.destination) + taxi.cash * 2
+        # if len(env.passengers) > 0:
+        #     best_passenger = self.getBestPassenger(taxi, env, taxi_id)
+        # if manhattan_distance(taxi.position, env.passengers[best_passenger].destination) > taxi.fuel:
+        #     return taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env, taxi_id)].position) + taxi.cash
+        # #TODO: Add consideration to fuel.
+        # return self.calculateProfit(env, taxi_id, 0) +  self.calculateProfit(env, taxi_id, 1) + taxi.cash
+        if len(env.passengers) > 0:
+             has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
+            #has_gas_to_0 = self.canReachToPassengerAndRefuel(env, taxi, 0)
+        else:
+            has_gas_to_0 = 0
+        if len(env.passengers) > 1:
+            has_gas_to_1 = self.hasGasToTarget(env, taxi_id, env.passengers[1].position)
+            #has_gas_to_1 = self.canReachToPassengerAndRefuel(env, taxi, 1)
+        else:
+            has_gas_to_1 = 0
+        if taxi.passenger != None:
+            target_dest = taxi.passenger.destination
+            has_gas_to_2 = self.hasGasToTarget(env, taxi_id, target_dest)
+            profit = manhattan_distance(taxi.passenger.position, taxi.passenger.destination)
+        else:
+            target_dest = taxi.position
+            has_gas_to_2 = 0
+            profit = 0
+        should_refuel = self.shouldRefuel(env, taxi_id, max(self.calculateProfit(env, taxi_id, 0), self.calculateProfit(env, taxi_id, 1), 0), has_gas_to_0, has_gas_to_1, has_gas_to_2)         
+        return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * profit + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
+        # return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 1.5 + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
 
 
-class AgentAlphaBeta(Agent):
+
+class AgentAlphaBeta(AgentMinimax):
     # TODO: section c : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
-        raise NotImplementedError()
+        self.end_time = time.time() + 0.8*time_limit
+        self.alpha = -float("inf")
+        step = self.id_minimax(env, agent_id, time_limit)
+        return step
+    
+    def id_minimax(self, env, agent_id, time_limit):
+        depth = 1
+        while True:
+            last_chosen_step = self.minimax(env, agent_id, depth, -float("inf"), float("inf"))
+            if time.time() > self.end_time:
+                print("max depth: ", depth)
+                break 
+            else:
+                step = last_chosen_step
+            depth += 1
+        return step
+
+    def minimax(self, env, agent_id, l, alpha, beta):
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        children_results = [self.min(child, 1-agent_id, l-1, alpha, beta) for child in children]
+        max_result = max(children_results)
+        index_selected = children_results.index(max_result)
+        return operators[index_selected]  
+    
+    # TODO apply pruning , find out what to do with alpha and beta and when to return -inf/+inf, 
+    # - should alpha and beta be passed on with the recursion or be a class variable? 
+    # - i recomend watching tutorial 6 to go over it. 
+    # - notice it inherits from minimax agent so it overrides the function calls
+    # - good luck omer i believe in you
+    def min(self, env, agent_id, l, alpha, beta):
+        if time.time() > self.end_time:
+            return -1
+        if l == 0:
+            return self.heuristic(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        # this line might need to change in order to apply pruning
+        children_results = [self.max(child, 1-agent_id, l-1) for child in children]
+        min_result = min(children_results)
+        self.beta = min(self.beta, min_result)
+        return min_result
+
+    def max(self, env, agent_id, l):
+        if time.time() > self.end_time:
+            return -1
+        if l == 0:
+            return self.heuristic(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        # this line might need to change in order to apply pruning
+        children_results = [self.min(child, 1-agent_id, l-1) for child in children]
+        max_result = max(children_results)
+        self.alpha = max(self.alpha, max_result)
+        return max_result
+        
 
 
 class AgentExpectimax(Agent):
