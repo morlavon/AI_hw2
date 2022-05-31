@@ -117,18 +117,16 @@ class AgentGreedyImproved(AgentGreedy):
 # F === Fuel remaining = current fuel - ((distance from passenger to dest) + (distance from taxi to passenger))
 
 
-global minimax_step
-minimax_step = ""
-
 class AgentMinimax(AgentGreedyImproved):
     # TODO: section b : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
-        self.end_time = time.time() + 0.8*time_limit
-        step = self.id_minimax(env, agent_id, time_limit)
+        self.end_time = time.time() + 0.8*time_limit - 0.05
+        self.max_player = agent_id
+        step = self.id_minimax(env, agent_id)
         return step
 
     def id_minimax(self, env, agent_id):
-        depth = 1
+        depth = 2
         while True:
             last_chosen_step = self.minimax(env, agent_id, depth)
             if time.time() > self.end_time:
@@ -136,9 +134,8 @@ class AgentMinimax(AgentGreedyImproved):
                 break 
             else:
                 step = last_chosen_step
-            depth += 1
+            depth += 2
         return step
-
     def minimax(self, env, agent_id, l):
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
@@ -152,7 +149,7 @@ class AgentMinimax(AgentGreedyImproved):
     def min(self, env, agent_id, l):
         if time.time() > self.end_time:
             return -1
-        if l == 0:
+        if l == 0 :
             return self.heuristic(env, agent_id)
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
@@ -174,8 +171,6 @@ class AgentMinimax(AgentGreedyImproved):
         children_results = [self.min(child, 1-agent_id, l-1) for child in children]
         max_result = max(children_results)
         return max_result
-        # index_selected = children_results.index(max_result)
-        # return operators[index_selected]
 
     def heuristic(self, env: TaxiEnv, taxi_id: int):
         #Calculate PROFIT for each passenger.
@@ -212,27 +207,31 @@ class AgentMinimax(AgentGreedyImproved):
 
 
 
-class AgentAlphaBeta(AgentMinimax):
+class AgentAlphaBeta(AgentGreedyImproved):
     # TODO: section c : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
-        self.end_time = time.time() + 0.8*time_limit
-        self.alpha = -float("inf")
-        step = self.id_minimax(env, agent_id, time_limit)
+        self.end_time = time.time() + 0.8*time_limit - 0.05
+        step = self.id_alpha_beta(env, agent_id)
         return step
     
-    def id_minimax(self, env, agent_id, time_limit):
-        depth = 1
-        while True:
-            last_chosen_step = self.minimax(env, agent_id, depth, -float("inf"), float("inf"))
+    def id_alpha_beta(self, env, agent_id):
+        depth = 2
+        while depth <3:
+            last_chosen_step = self.alpha_beta(env, agent_id, depth, -float("inf"), float("inf"))
             if time.time() > self.end_time:
                 print("max depth: ", depth)
                 break 
             else:
                 step = last_chosen_step
-            depth += 1
+            depth += 2
         return step
 
-    def minimax(self, env, agent_id, l, alpha, beta):
+    # def heuristic(self, env: TaxiEnv, taxi_id: int):
+    #     taxi = env.get_taxi(taxi_id)
+    #     other_taxi = env.get_taxi((taxi_id+1) % 2)
+    #     return taxi.cash - other_taxi.cash
+
+    def alpha_beta(self, env, agent_id, l, alpha, beta):
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
         for child, op in zip(children, operators):
@@ -242,12 +241,9 @@ class AgentAlphaBeta(AgentMinimax):
         index_selected = children_results.index(max_result)
         return operators[index_selected]  
     
-    # TODO apply pruning , find out what to do with alpha and beta and when to return -inf/+inf, 
-    # - should alpha and beta be passed on with the recursion or be a class variable? 
-    # - i recomend watching tutorial 6 to go over it. 
-    # - notice it inherits from minimax agent so it overrides the function calls
-    # - good luck omer i believe in you
+    # now does the expectency not the min
     def min(self, env, agent_id, l, alpha, beta):
+        curr_min = float("inf")
         if time.time() > self.end_time:
             return -1
         if l == 0:
@@ -256,11 +252,88 @@ class AgentAlphaBeta(AgentMinimax):
         children = [env.clone() for _ in operators]
         for child, op in zip(children, operators):
             child.apply_operator(agent_id, op)
-        # this line might need to change in order to apply pruning
-        children_results = [self.max(child, 1-agent_id, l-1) for child in children]
-        min_result = min(children_results)
-        self.beta = min(self.beta, min_result)
-        return min_result
+            curr_result = self.max(child, 1-agent_id, l-1, alpha, beta)
+            curr_min = min(curr_result, curr_min)
+            beta = min(curr_min, beta)
+            # prune node when min >= alpha
+            if curr_min >= alpha:
+                return -float("inf")
+        return curr_min
+
+    def max(self, env, agent_id, l, alpha, beta):
+        curr_max = -float("inf")
+        if time.time() > self.end_time:
+            return -1
+        if l == 0:
+            return self.heuristic(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+            curr_result = self.min(child, 1-agent_id, l-1, alpha, beta)
+            curr_max = max(curr_result, curr_max)
+            alpha = max(curr_max, alpha)
+            # prune node when max <= beta
+            if curr_max <= beta:
+                return float("inf")
+        return curr_max
+
+
+class AgentExpectimax(Agent):
+    # TODO: section d : 1
+    def run_step(self, env: TaxiEnv, agent_id, time_limit):
+        self.end_time = time.time() + 0.8*time_limit - 0.05
+        step = self.id_expectimax(env, agent_id)
+        return step
+    
+    def get_op_sum(self, op_list):
+        sum = 0
+        for op in op_list:
+            op_val = 2 if op in ['pick up passenger','drop off passenger','refuel'] else 1
+            sum += op_val
+        return sum    
+
+    def get_probability(self, op, op_sum):
+        op_val = 2 if op in ['pick up passenger','drop off passenger','refuel'] else 1
+        return op_val/op_sum
+
+    def id_expectimax(self, env, agent_id):
+        depth = 2
+        while True:
+            last_chosen_step = self.expectimax(env, agent_id, depth)
+            if time.time() > self.end_time:
+                print("max depth: ", depth)
+                break 
+            else:
+                step = last_chosen_step
+            depth += 2
+        return step
+
+    def expectimax(self, env, agent_id, l):
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        children_results = [self.min(child, 1-agent_id, l-1) for child in children]
+        max_result = max(children_results)
+        index_selected = children_results.index(max_result)
+        return operators[index_selected]  
+    
+    # now returns expectency not min
+    def min(self, env, agent_id, l):
+        if time.time() > self.end_time:
+            return -1
+        if l == 0 :
+            return self.heuristic(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        expectency = 0
+        op_sum = self.get_op_sum(operators)
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+            op_probability = self.get_probability(op, op_sum)
+            expectency += op_probability * self.max(child, 1-agent_id, l-1)
+        return expectency
 
     def max(self, env, agent_id, l):
         if time.time() > self.end_time:
@@ -271,15 +344,74 @@ class AgentAlphaBeta(AgentMinimax):
         children = [env.clone() for _ in operators]
         for child, op in zip(children, operators):
             child.apply_operator(agent_id, op)
-        # this line might need to change in order to apply pruning
         children_results = [self.min(child, 1-agent_id, l-1) for child in children]
         max_result = max(children_results)
-        self.alpha = max(self.alpha, max_result)
         return max_result
-        
 
 
-class AgentExpectimax(Agent):
-    # TODO: section d : 1
-    def run_step(self, env: TaxiEnv, agent_id, time_limit):
-        raise NotImplementedError()
+# --------------------------------------- psudo code -----------------------------------------------------
+# def alpha_beta(self, env, agent_id, l, alpha, beta):
+#         if G(state) or l == 0:
+#             return h(state, Agent)
+#         turn = state.turn
+#         children = successors(state)
+#         if turn == agent:
+#             curr_max = -float("inf")
+#             for child, op in zip(children, operators):
+#                 child.apply_operator(agent_id, op)
+#                 curr_result = self.min(child, 1-agent_id, l-1, alpha, beta)
+#                 curr_max = max(curr_result, curr_max)
+#                 alpha = max(curr_max, alpha)
+#                 # prune node when max <= beta
+#                 if curr_max <= beta or curr_max <= (f(state) - 2):
+#                 return float("inf")
+#             return curr_max
+#         else:
+#             curr_min = float("inf")
+#             for child, op in zip(children, operators):
+#                 child.apply_operator(agent_id, op)
+#                 curr_result = self.max(child, 1-agent_id, l-1, alpha, beta)
+#                 curr_min = min(curr_result, curr_min)
+#                 beta = min(curr_min, beta)
+#                 # prune node when min >= alpha
+#                 if curr_min >= alpha or curr_min >= (f(state) + 2):
+#                     return -float("inf")
+#             return curr_min
+    
+#     # now does the expectency not the min
+#     def min(self, env, agent_id, l, alpha, beta):
+#         curr_min = float("inf")
+#         if time.time() > self.end_time:
+#             return -1
+#         if l == 0:
+#             return self.heuristic(env, agent_id)
+#         operators = env.get_legal_operators(agent_id)
+#         children = [env.clone() for _ in operators]
+#         for child, op in zip(children, operators):
+#             child.apply_operator(agent_id, op)
+#             curr_result = self.max(child, 1-agent_id, l-1, alpha, beta)
+#             curr_min = min(curr_result, curr_min)
+#             beta = min(curr_min, beta)
+#             # prune node when min >= alpha
+#             if curr_min >= alpha:
+#                 return -float("inf")
+#         return curr_min
+
+#     def max(self, env, agent_id, l, alpha, beta):
+#         curr_max = -float("inf")
+#         if time.time() > self.end_time:
+#             return -1
+#         if l == 0:
+#             return self.heuristic(env, agent_id)
+#         operators = env.get_legal_operators(agent_id)
+#         children = [env.clone() for _ in operators]
+#         for child, op in zip(children, operators):
+#             child.apply_operator(agent_id, op)
+#             curr_result = self.min(child, 1-agent_id, l-1, alpha, beta)
+#             curr_max = max(curr_result, curr_max)
+#             alpha = max(curr_max, alpha)
+#             # prune node when max <= beta
+#             if curr_max <= beta:
+#                 return float("inf")
+#         return curr_max
+   
