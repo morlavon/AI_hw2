@@ -7,7 +7,6 @@ import ctypes
 
 
 class AgentGreedyImproved(AgentGreedy):
-    # TODO: section a : 3
     def run_step(self, env: TaxiEnv, taxi_id, time_limit):
         operators = env.get_legal_operators(taxi_id)
         children = [env.clone() for _ in operators]
@@ -19,24 +18,13 @@ class AgentGreedyImproved(AgentGreedy):
         return operators[index_selected]
 
     def heuristic(self, env: TaxiEnv, taxi_id: int):
-        #Calculate PROFIT for each passenger.
         taxi = env.get_taxi(taxi_id)
-        # if taxi.passenger != None:
-        #     return taxi.fuel - manhattan_distance(taxi.position, taxi.passenger.destination) + taxi.cash * 2
-        # if len(env.passengers) > 0:
-        #     best_passenger = self.getBestPassenger(taxi, env, taxi_id)
-        # if manhattan_distance(taxi.position, env.passengers[best_passenger].destination) > taxi.fuel:
-        #     return taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env, taxi_id)].position) + taxi.cash
-        # #TODO: Add consideration to fuel.
-        # return self.calculateProfit(env, taxi_id, 0) +  self.calculateProfit(env, taxi_id, 1) + taxi.cash
         if len(env.passengers) > 0:
              has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
-            #has_gas_to_0 = self.canReachToPassengerAndRefuel(env, taxi, 0)
         else:
             has_gas_to_0 = 0
         if len(env.passengers) > 1:
             has_gas_to_1 = self.hasGasToTarget(env, taxi_id, env.passengers[1].position)
-            #has_gas_to_1 = self.canReachToPassengerAndRefuel(env, taxi, 1)
         else:
             has_gas_to_1 = 0
         if taxi.passenger != None:
@@ -49,7 +37,6 @@ class AgentGreedyImproved(AgentGreedy):
             profit = 0
         should_refuel = self.shouldRefuel(env, taxi_id, max(self.calculateProfit(env, taxi_id, 0), self.calculateProfit(env, taxi_id, 1), 0), has_gas_to_0, has_gas_to_1, has_gas_to_2)         
         return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * profit + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
-        # return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 1.5 + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
 
 
     def calculateProfit(self, env: TaxiEnv, taxi_id, passenger_id):
@@ -77,6 +64,17 @@ class AgentGreedyImproved(AgentGreedy):
             return 0
         return 1
 
+    def getClosestPassenger(self,  env: TaxiEnv, taxi):
+        dist0 = 0
+        dist1 = 0
+        if len(env.passengers) > 0:
+            dist0 = manhattan_distance(taxi.position, env.passengers[0].position)
+        if len(env.passengers) > 1:
+            dist1 = manhattan_distance(taxi.position, env.passengers[1].position)
+        if dist0 < dist1:
+            return 0
+        return 1
+
     def getBestPassenger(self, taxi, env: TaxiEnv, taxi_id):
         p0 = 0
         p1 = 0
@@ -100,21 +98,10 @@ class AgentGreedyImproved(AgentGreedy):
         distance_to_destination = manhattan_distance(taxi.position, env.passengers[passenger_id].position) + manhattan_distance(env.passengers[passenger_id].destination, env.passengers[passenger_id].position)
         distance_to_gas_station = min(manhattan_distance(env.gas_stations[0].position, env.passengers[passenger_id].destination), manhattan_distance(env.gas_stations[1].position, env.passengers[passenger_id].destination))
         return taxi.fuel >= distance_to_destination + distance_to_gas_station
-# Things to consider:
-# 2. PROFIT.
-# 4. Fuel remaining.
-# 5. Distance to gas stations.
-# 6. Cash available.
 
-
-
-# 1. Find passenger with max profit.
-# 2. Calculate distance to it. === D
-
-
-
-# P === Profit = (distance from passenger to dest) - (distance from taxi to passenger)
-# F === Fuel remaining = current fuel - ((distance from passenger to dest) + (distance from taxi to passenger))
+# ======================================================================
+# =============================MINIMAX==================================
+# ======================================================================
 
 
 class AgentMinimax(AgentGreedyImproved):
@@ -125,17 +112,20 @@ class AgentMinimax(AgentGreedyImproved):
         step = self.id_minimax(env, agent_id)
         return step
 
+
     def id_minimax(self, env, agent_id):
         depth = 2
         while True:
             last_chosen_step = self.minimax(env, agent_id, depth)
             if time.time() > self.end_time:
-                print("max depth: ", depth)
+            #    print("max depth: ", depth)
                 break 
             else:
                 step = last_chosen_step
             depth += 2
         return step
+
+
     def minimax(self, env, agent_id, l):
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
@@ -146,10 +136,11 @@ class AgentMinimax(AgentGreedyImproved):
         index_selected = children_results.index(max_result)
         return operators[index_selected]  
     
+
     def min(self, env, agent_id, l):
         if time.time() > self.end_time:
-            return -1
-        if l == 0 :
+            return self.heuristic(env, agent_id)
+        if l == 0  or env.done():
             return self.heuristic(env, agent_id)
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
@@ -161,8 +152,8 @@ class AgentMinimax(AgentGreedyImproved):
 
     def max(self, env, agent_id, l):
         if time.time() > self.end_time:
-            return -1
-        if l == 0:
+            return self.heuristic(env, agent_id)
+        if l == 0 or env.done():
             return self.heuristic(env, agent_id)
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
@@ -172,25 +163,16 @@ class AgentMinimax(AgentGreedyImproved):
         max_result = max(children_results)
         return max_result
 
+
     def heuristic(self, env: TaxiEnv, taxi_id: int):
-        #Calculate PROFIT for each passenger.
         taxi = env.get_taxi(taxi_id)
-        # if taxi.passenger != None:
-        #     return taxi.fuel - manhattan_distance(taxi.position, taxi.passenger.destination) + taxi.cash * 2
-        # if len(env.passengers) > 0:
-        #     best_passenger = self.getBestPassenger(taxi, env, taxi_id)
-        # if manhattan_distance(taxi.position, env.passengers[best_passenger].destination) > taxi.fuel:
-        #     return taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env, taxi_id)].position) + taxi.cash
-        # #TODO: Add consideration to fuel.
-        # return self.calculateProfit(env, taxi_id, 0) +  self.calculateProfit(env, taxi_id, 1) + taxi.cash
+        other_taxi = env.get_taxi(1 - taxi_id)
         if len(env.passengers) > 0:
              has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
-            #has_gas_to_0 = self.canReachToPassengerAndRefuel(env, taxi, 0)
         else:
             has_gas_to_0 = 0
         if len(env.passengers) > 1:
             has_gas_to_1 = self.hasGasToTarget(env, taxi_id, env.passengers[1].position)
-            #has_gas_to_1 = self.canReachToPassengerAndRefuel(env, taxi, 1)
         else:
             has_gas_to_1 = 0
         if taxi.passenger != None:
@@ -200,14 +182,18 @@ class AgentMinimax(AgentGreedyImproved):
         else:
             target_dest = taxi.position
             has_gas_to_2 = 0
-            profit = 0
-        should_refuel = self.shouldRefuel(env, taxi_id, max(self.calculateProfit(env, taxi_id, 0), self.calculateProfit(env, taxi_id, 1), 0), has_gas_to_0, has_gas_to_1, has_gas_to_2)         
-        return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * profit + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
-        # return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 1.5 + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
+            profit = 0     
+        return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * profit + taxi.cash - other_taxi.cash
+
+        # h = super().heuristic(env, taxi_id)
+        # return h - env.get_taxi(1 - taxi_id).cash
+
+# ======================================================================
+# ============================ALPHA_BETA================================
+# ======================================================================
 
 
-
-class AgentAlphaBeta(AgentGreedyImproved):
+class AgentAlphaBeta(AgentMinimax):
     # TODO: section c : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
         self.end_time = time.time() + 0.8*time_limit - 0.05
@@ -216,20 +202,15 @@ class AgentAlphaBeta(AgentGreedyImproved):
     
     def id_alpha_beta(self, env, agent_id):
         depth = 2
-        while depth <3:
+        while True:
             last_chosen_step = self.alpha_beta(env, agent_id, depth, -float("inf"), float("inf"))
             if time.time() > self.end_time:
-                print("max depth: ", depth)
+             #   print("max depth: ", depth)
                 break 
             else:
                 step = last_chosen_step
             depth += 2
         return step
-
-    # def heuristic(self, env: TaxiEnv, taxi_id: int):
-    #     taxi = env.get_taxi(taxi_id)
-    #     other_taxi = env.get_taxi((taxi_id+1) % 2)
-    #     return taxi.cash - other_taxi.cash
 
     def alpha_beta(self, env, agent_id, l, alpha, beta):
         operators = env.get_legal_operators(agent_id)
@@ -244,8 +225,8 @@ class AgentAlphaBeta(AgentGreedyImproved):
     # now does the expectency not the min
     def min(self, env, agent_id, l, alpha, beta):
         curr_min = float("inf")
-        if time.time() > self.end_time:
-            return -1
+        if time.time() > self.end_time :
+            return self.heuristic(env, agent_id)
         if l == 0:
             return self.heuristic(env, agent_id)
         operators = env.get_legal_operators(agent_id)
@@ -255,15 +236,15 @@ class AgentAlphaBeta(AgentGreedyImproved):
             curr_result = self.max(child, 1-agent_id, l-1, alpha, beta)
             curr_min = min(curr_result, curr_min)
             beta = min(curr_min, beta)
-            # prune node when min >= alpha
-            if curr_min >= alpha:
+            # prune node when min <= alpha
+            if curr_min <= alpha:
                 return -float("inf")
         return curr_min
 
     def max(self, env, agent_id, l, alpha, beta):
         curr_max = -float("inf")
         if time.time() > self.end_time:
-            return -1
+            return self.heuristic(env, agent_id)
         if l == 0:
             return self.heuristic(env, agent_id)
         operators = env.get_legal_operators(agent_id)
@@ -273,11 +254,15 @@ class AgentAlphaBeta(AgentGreedyImproved):
             curr_result = self.min(child, 1-agent_id, l-1, alpha, beta)
             curr_max = max(curr_result, curr_max)
             alpha = max(curr_max, alpha)
-            # prune node when max <= beta
-            if curr_max <= beta:
+            # prune node when max >= beta
+            if curr_max >= beta:
                 return float("inf")
         return curr_max
 
+
+# ======================================================================
+# ============================EXPECTIMAX================================
+# ======================================================================
 
 class AgentExpectimax(Agent):
     # TODO: section d : 1
