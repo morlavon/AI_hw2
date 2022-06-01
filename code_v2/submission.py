@@ -19,24 +19,13 @@ class AgentGreedyImproved(AgentGreedy):
         return operators[index_selected]
 
     def heuristic(self, env: TaxiEnv, taxi_id: int):
-        #Calculate PROFIT for each passenger.
         taxi = env.get_taxi(taxi_id)
-        # if taxi.passenger != None:
-        #     return taxi.fuel - manhattan_distance(taxi.position, taxi.passenger.destination) + taxi.cash * 2
-        # if len(env.passengers) > 0:
-        #     best_passenger = self.getBestPassenger(taxi, env, taxi_id)
-        # if manhattan_distance(taxi.position, env.passengers[best_passenger].destination) > taxi.fuel:
-        #     return taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env, taxi_id)].position) + taxi.cash
-        # #TODO: Add consideration to fuel.
-        # return self.calculateProfit(env, taxi_id, 0) +  self.calculateProfit(env, taxi_id, 1) + taxi.cash
         if len(env.passengers) > 0:
              has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
-            #has_gas_to_0 = self.canReachToPassengerAndRefuel(env, taxi, 0)
         else:
             has_gas_to_0 = 0
         if len(env.passengers) > 1:
             has_gas_to_1 = self.hasGasToTarget(env, taxi_id, env.passengers[1].position)
-            #has_gas_to_1 = self.canReachToPassengerAndRefuel(env, taxi, 1)
         else:
             has_gas_to_1 = 0
         if taxi.passenger != None:
@@ -49,7 +38,6 @@ class AgentGreedyImproved(AgentGreedy):
             profit = 0
         should_refuel = self.shouldRefuel(env, taxi_id, max(self.calculateProfit(env, taxi_id, 0), self.calculateProfit(env, taxi_id, 1), 0), has_gas_to_0, has_gas_to_1, has_gas_to_2)         
         return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * profit + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
-        # return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 1.5 + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
 
 
     def calculateProfit(self, env: TaxiEnv, taxi_id, passenger_id):
@@ -100,21 +88,6 @@ class AgentGreedyImproved(AgentGreedy):
         distance_to_destination = manhattan_distance(taxi.position, env.passengers[passenger_id].position) + manhattan_distance(env.passengers[passenger_id].destination, env.passengers[passenger_id].position)
         distance_to_gas_station = min(manhattan_distance(env.gas_stations[0].position, env.passengers[passenger_id].destination), manhattan_distance(env.gas_stations[1].position, env.passengers[passenger_id].destination))
         return taxi.fuel >= distance_to_destination + distance_to_gas_station
-# Things to consider:
-# 2. PROFIT.
-# 4. Fuel remaining.
-# 5. Distance to gas stations.
-# 6. Cash available.
-
-
-
-# 1. Find passenger with max profit.
-# 2. Calculate distance to it. === D
-
-
-
-# P === Profit = (distance from passenger to dest) - (distance from taxi to passenger)
-# F === Fuel remaining = current fuel - ((distance from passenger to dest) + (distance from taxi to passenger))
 
 
 global minimax_step
@@ -124,31 +97,63 @@ class AgentMinimax(AgentGreedyImproved):
     # TODO: section b : 1
     def run_step(self, env: TaxiEnv, agent_id, time_limit):
         self.end_time = time.time() + 0.8*time_limit
-        step = self.id_minimax(env, agent_id, time_limit)
-        return step
+        self.id = agent_id
+        # step = self.id_minimax(env, agent_id)
+        operators = env.get_legal_operators(agent_id)
+        children = [env.clone() for _ in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent_id, op)
+        children_heuristics = [self.id_minimax(child, agent_id) for child in children]
+        max_heuristic = max(children_heuristics)
+        index_selected = children_heuristics.index(max_heuristic)
+        return operators[index_selected]
 
     def id_minimax(self, env, agent_id):
         depth = 1
-        while True:
-            last_chosen_step = self.minimax(env, agent_id, depth)
+        step = 0
+        last_chosen_step = -1000000
+        while True: #depth < 5?
+            last_chosen_step = max(last_chosen_step, self.minimax(env, agent_id, depth))
             if time.time() > self.end_time:
                 print("max depth: ", depth)
                 break 
             else:
                 step = last_chosen_step
             depth += 1
+        # print('Got to depth of: ', depth)
         return step
 
+    # def minimax(self, env, agent_id, l):
+    #     operators = env.get_legal_operators(agent_id)
+    #     children = [env.clone() for _ in operators]
+    #     for child, op in zip(children, operators):
+    #         child.apply_operator(agent_id, op)
+    #     children_results = [self.min(child, 1-agent_id, l-1) for child in children]
+    #     max_result = max(children_results)
+    #     index_selected = children_results.index(max_result)
+    #     return operators[index_selected]
+    #   
     def minimax(self, env, agent_id, l):
+        if l == 0 or (env.get_taxi(agent_id).fuel == 0 and env.get_taxi(1 - agent_id).fuel == 0):
+            return self.heuristic(env, agent_id)
+        if time.time() > self.end_time:
+            return -1
         operators = env.get_legal_operators(agent_id)
         children = [env.clone() for _ in operators]
         for child, op in zip(children, operators):
             child.apply_operator(agent_id, op)
-        children_results = [self.min(child, 1-agent_id, l-1) for child in children]
-        max_result = max(children_results)
-        index_selected = children_results.index(max_result)
-        return operators[index_selected]  
-    
+        if agent_id == self.id:
+            children_max_results = [self.minimax(child, 1 - agent_id, l - 1) for child in children]
+            cur_max = max(children_max_results)
+            return cur_max
+        else:
+                
+            children_min_results = [self.minimax(child, 1-agent_id, l-1) for child in children]
+            cur_min = min(children_min_results)
+            # index_selected = children_results.index(max_result)
+        return cur_min
+
+
     def min(self, env, agent_id, l):
         if time.time() > self.end_time:
             return -1
@@ -174,20 +179,9 @@ class AgentMinimax(AgentGreedyImproved):
         children_results = [self.min(child, 1-agent_id, l-1) for child in children]
         max_result = max(children_results)
         return max_result
-        # index_selected = children_results.index(max_result)
-        # return operators[index_selected]
 
     def heuristic(self, env: TaxiEnv, taxi_id: int):
-        #Calculate PROFIT for each passenger.
         taxi = env.get_taxi(taxi_id)
-        # if taxi.passenger != None:
-        #     return taxi.fuel - manhattan_distance(taxi.position, taxi.passenger.destination) + taxi.cash * 2
-        # if len(env.passengers) > 0:
-        #     best_passenger = self.getBestPassenger(taxi, env, taxi_id)
-        # if manhattan_distance(taxi.position, env.passengers[best_passenger].destination) > taxi.fuel:
-        #     return taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env, taxi_id)].position) + taxi.cash
-        # #TODO: Add consideration to fuel.
-        # return self.calculateProfit(env, taxi_id, 0) +  self.calculateProfit(env, taxi_id, 1) + taxi.cash
         if len(env.passengers) > 0:
              has_gas_to_0 = self.hasGasToTarget(env, taxi_id, env.passengers[0].position)
             #has_gas_to_0 = self.canReachToPassengerAndRefuel(env, taxi, 0)
@@ -208,7 +202,6 @@ class AgentMinimax(AgentGreedyImproved):
             profit = 0
         should_refuel = self.shouldRefuel(env, taxi_id, max(self.calculateProfit(env, taxi_id, 0), self.calculateProfit(env, taxi_id, 1), 0), has_gas_to_0, has_gas_to_1, has_gas_to_2)         
         return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * profit + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
-        # return max(has_gas_to_0 * self.calculateProfit(env, taxi_id, 0), has_gas_to_1 * self.calculateProfit(env, taxi_id, 1)) + has_gas_to_2 * (taxi.fuel - manhattan_distance(taxi.position, target_dest)) * 1.5 + (taxi.fuel - manhattan_distance(taxi.position, env.gas_stations[self.getClosestGasStation(taxi, env)].position)) * should_refuel + taxi.cash
 
 
 

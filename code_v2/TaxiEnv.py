@@ -1,7 +1,7 @@
 import random
 from copy import copy
 
-
+size = 4
 def manhattan_distance(p0, p1):
     return abs(p0[0] - p1[0]) + abs(p0[1] - p1[1])
 
@@ -63,7 +63,7 @@ class TaxiEnv(object):
     def random_cells(self, count: int):
         random.seed(self.seed)
         self.seed = random.randint(0, 255)
-        return random.sample([(x, y) for x in range(4) for y in range(4)], count)
+        return random.sample([(x, y) for x in range(size) for y in range(size)], count)
 
     def get_taxi(self, taxi_id):
         return self.taxis[taxi_id]
@@ -95,7 +95,7 @@ class TaxiEnv(object):
             for op_move, op_disp in [('move north', (0, -1)), ('move south', (0, 1)),
                                      ('move west', (-1, 0)), ('move east', (1, 0))]:
                 new_pos = (taxi_pos[0] + op_disp[0], taxi_pos[1] + op_disp[1])
-                if 4 > new_pos[0] >= 0 and 4 > new_pos[1] >= 0 \
+                if size > new_pos[0] >= 0 and size > new_pos[1] >= 0 \
                         and self.get_taxi_in(new_pos) is None:
                     ops.append(op_move)
         else:
@@ -156,8 +156,8 @@ class TaxiEnv(object):
         return self.taxis[taxi_index].passenger is not None
 
     def print(self):
-        for y in range(4):
-            for x in range(4):
+        for y in range(size):
+            for x in range(size):
                 p = (x, y)
                 taxi = self.get_taxi_in(p)
                 passenger = self.get_passenger_in(p)
